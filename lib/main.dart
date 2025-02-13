@@ -1,12 +1,18 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:sec_pro/bloc/login_authentication/bloc/login_bloc.dart';
 import 'package:sec_pro/bloc/profilePage/bloc/profile_bloc.dart';
-import 'package:sec_pro/bloc/signUpAuthentication/bloc/sign_up_bloc.dart';  
+import 'package:sec_pro/bloc/signUpAuthentication/bloc/sign_up_bloc.dart';
+import 'package:sec_pro/screens/home/bloc/bloc/home_bloc.dart';
+import 'package:sec_pro/screens/search/payment/key.dart';
 import 'package:sec_pro/screens/splashScreen/splash_screen.dart';
 import 'package:sec_pro/service/auth/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+
+//stripe payment gateway
 
 class SimpleBlocObserver extends BlocObserver {
   @override
@@ -26,6 +32,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await SharedPreferences.getInstance();
+  Stripe.publishableKey = STRIPE_PUBLISH_KEY;
+  await Stripe.instance.applySettings();
   
   Bloc.observer = SimpleBlocObserver();
   
@@ -53,6 +61,9 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
+
+        BlocProvider<HomeBloc>(create: (context) => HomeBloc(),),
+
         BlocProvider<ProfileBloc>(
           create: (context) => ProfileBloc(),
           )
@@ -64,7 +75,7 @@ class MyApp extends StatelessWidget {
         theme: ThemeData(
           primarySwatch: Colors.blue,
           visualDensity: VisualDensity.adaptivePlatformDensity,
-          // You might want to add other theme properties like:
+          
           inputDecorationTheme: InputDecorationTheme(
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
