@@ -2,18 +2,69 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sec_pro/screens/search/saloon_Detail/sample.dart';
 import 'package:sec_pro/service/favorite/fav_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class FavoriteSalonCard extends StatelessWidget {
+class FavoriteSalonCard extends StatefulWidget {
   final Map<String, dynamic> salon;
-  final FavoritesService _favoritesService = FavoritesService();
 
-  FavoriteSalonCard({
+  const FavoriteSalonCard({
     Key? key,
     required this.salon,
   }) : super(key: key);
 
+  @override
+  State<FavoriteSalonCard> createState() => _FavoriteSalonCardState();
+}
+
+class _FavoriteSalonCardState extends State<FavoriteSalonCard> {
+  final FavoritesService _favoritesService = FavoritesService();
+  double avgRating = 0;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAverageRating();
+  }
+
+  Future<void> _fetchAverageRating() async {
+    try {
+      final salonId = widget.salon['salonId'] ?? widget.salon['uid'];
+      
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('review')
+          .where('salonId', isEqualTo: salonId)
+          .get();
+      
+      if (querySnapshot.docs.isEmpty) {
+        setState(() {
+          avgRating = 0;
+          isLoading = false;
+        });
+        return;
+      }
+      
+      double totalRating = 0;
+      
+      for (var doc in querySnapshot.docs) {
+        final data = doc.data();
+        final rating = (data['rating'] ?? 0).toDouble();
+        totalRating += rating;
+      }
+      
+      setState(() {
+        avgRating = totalRating / querySnapshot.docs.length;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error calculating average rating: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
   Future<void> _removeFromFavorites(BuildContext context) async {
-    // Show confirmation dialog first
     final bool? shouldRemove = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -52,10 +103,9 @@ class FavoriteSalonCard extends StatelessWidget {
 
     if (shouldRemove == true) {
       try {
-        final salonId = salon['salonId'] ?? salon['uid'];
+        final salonId = widget.salon['salonId'] ?? widget.salon['uid'];
         await _favoritesService.removeFromFavorites(salonId);
         
-        // Only show SnackBar if the context is still valid
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -70,7 +120,6 @@ class FavoriteSalonCard extends StatelessWidget {
           );
         }
       } catch (e) {
-        // Only show error SnackBar if the context is still valid
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -89,6 +138,9 @@ class FavoriteSalonCard extends StatelessWidget {
     }
   }
 
+  void _navigateToSalonDetail(BuildContext context) {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => SampleDetail(salonData: widget.salon)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,19 +160,23 @@ class FavoriteSalonCard extends StatelessWidget {
       ),
       child: Material(
         color: Colors.transparent,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSalonImage(),
-            _buildSalonDetails(context),
-          ],
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _navigateToSalonDetail(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSalonImage(),
+              _buildSalonDetails(context),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildSalonImage() {
-    // Previous image building code remains the same
     return Stack(
       children: [
         ClipRRect(
@@ -128,7 +184,7 @@ class FavoriteSalonCard extends StatelessWidget {
             top: Radius.circular(16),
           ),
           child: Image.network(
-            salon['shopUrl'] ?? salon['profileUrl'] ?? '',
+            widget.salon['shopUrl'] ?? widget.salon['profileUrl'] ?? '',
             height: 180,
             width: double.infinity,
             fit: BoxFit.cover,
@@ -170,14 +226,23 @@ class FavoriteSalonCard extends StatelessWidget {
                   size: 16,
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  '4.5',
-                  style: GoogleFonts.montserrat(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
+                isLoading
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.black54,
+                        ),
+                      )
+                    : Text(
+                        avgRating.toStringAsFixed(1),
+                        style: GoogleFonts.montserrat(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
               ],
             ),
           ),
@@ -203,7 +268,7 @@ class FavoriteSalonCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  salon['saloonName'] ?? salon['name'] ?? 'Unknown Salon',
+                  widget.salon['salonName'] ?? widget.salon['name'] ?? 'Unknown Salon',
                   style: GoogleFonts.montserrat(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -213,7 +278,6 @@ class FavoriteSalonCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // Replace Book Now button with remove favorite icon
               IconButton(
                 onPressed: () => _removeFromFavorites(context),
                 icon: const Icon(Icons.favorite),
@@ -223,22 +287,31 @@ class FavoriteSalonCard extends StatelessWidget {
                 constraints: const BoxConstraints(),
                 iconSize: 24,
               ),
-
             ],
           ),
           const SizedBox(height: 12),
-          _buildInfoRow(
-            Icons.location_on,
-            salon['location'] ?? 'Location not available',
-            Colors.grey[700]!,
+          
+          // View Details Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => _navigateToSalonDetail(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF5C6BC0),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'View Details',
+                style: GoogleFonts.montserrat(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
-          _buildInfoRow(
-            Icons.phone,
-            salon['phone'] ?? 'Not available',
-            Colors.grey[700]!,
-          ),
-          const SizedBox(height: 12),
         ],
       ),
     );

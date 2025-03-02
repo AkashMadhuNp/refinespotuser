@@ -1,15 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sec_pro/screens/search/payment/payment.dart';
 import 'package:sec_pro/screens/search/saloon_Detail/widget/booking_container.dart';
 import 'package:sec_pro/screens/search/saloon_Detail/widget/date_picker.dart';
 import 'package:sec_pro/screens/search/saloon_Detail/widget/image_container.dart';
+import 'package:sec_pro/screens/search/saloon_Detail/widget/review_all_page.dart';
+import 'package:sec_pro/screens/search/saloon_Detail/widget/salon_review_preview.dart';
 import 'package:sec_pro/screens/search/saloon_Detail/widget/service_container.dart';
 import 'package:sec_pro/screens/search/saloon_Detail/widget/time_slot.dart';
 import 'package:sec_pro/screens/search/saloon_Detail/widget/working_hours.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:sec_pro/service/favorite/fav_service.dart';
 
 class SampleDetail extends StatefulWidget {
   final Map<String, dynamic> salonData;
@@ -24,12 +26,14 @@ class SampleDetail extends StatefulWidget {
 }
 
 class _SampleDetailState extends State<SampleDetail> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Firebase instances
+  final _firestore = FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
+  
+  // Stream subscription
+  StreamSubscription? _favoriteSubscription;
 
-  // late final FavoriteService _favoriteService;
-  late final FavoritesService _favoritesService;
-
+  // State variables
   bool isFavorite = false;
   bool isLoading = true;
   DateTime selectedDate = DateTime.now();
@@ -38,45 +42,37 @@ class _SampleDetailState extends State<SampleDetail> {
   double totalAmount = 0.0;
   int totalMinutes = 0;
 
-
-  // void _debugPrintSalonData() {
-  //   print('Salon Data Debug:');
-  //   print('Raw salon data: ${widget.salonData}');
-  //   print('UID: ${widget.salonData['uid']}');
-  //   print('ID: ${widget.salonData['id']}');
-  //   print('SalonId: ${widget.salonData['salonId']}');
-  // }
-
-  
- 
-@override
+  @override
   void initState() {
     super.initState();
-    
-    _favoritesService=FavoritesService();
     _initializeFavoriteStatus();
   }
 
+  @override
+  void dispose() {
+    _favoriteSubscription?.cancel();
+    super.dispose();
+  }
 
-void _initializeFavoriteStatus() {
-    if (_auth.currentUser == null) {
+  void _initializeFavoriteStatus() {
+    final user = _auth.currentUser;
+    final salonId = _getSalonId();
+    
+    if (user == null || salonId == null) {
       setState(() => isLoading = false);
       return;
     }
 
-    final salonId = widget.salonData['uid']?.toString();
-    if (salonId == null) {
-      setState(() => isLoading = false);
-      return;
-    }
-
-    _favoritesService
-        .isSalonFavorite(salonId)
+    _favoriteSubscription = _firestore
+        .collection('favorites')
+        .where('userId', isEqualTo: user.uid)
+        .where('salonId', isEqualTo: salonId)
+        .snapshots()
         .listen(
-          (isFav) {
+          (snapshot) {
             if (mounted) {
               setState(() {
-                isFavorite = isFav;
+                isFavorite = snapshot.docs.isNotEmpty;
                 isLoading = false;
               });
             }
@@ -84,108 +80,83 @@ void _initializeFavoriteStatus() {
           onError: (error) {
             if (mounted) {
               setState(() => isLoading = false);
+              _showSnackBar('Error checking favorite status', isError: true);
             }
           },
         );
   }
 
+  String? _getSalonId() {
+    return widget.salonData['uid']?.toString() ?? 
+           widget.salonData['id']?.toString() ?? 
+           widget.salonData['salonId']?.toString();
+  }
 
-Future<void> toggleFavorite() async {
+  Future<void> toggleFavorite() async {
+    final user = _auth.currentUser;
+    final salonId = _getSalonId();
+
+    if (user == null) {
+      _showSnackBar('Please login to add favorites');
+      return;
+    }
+
+    if (salonId == null) {
+      _showSnackBar('Error: Invalid salon data', isError: true);
+      return;
+    }
+
     if (isLoading) return;
+
     setState(() => isLoading = true);
 
     try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) {
-        _showSnackBar('Please login to add favorites');
-        return;
-      }
-
-      final salonId = _getSalonId();
-      if (salonId == null) {
-        _showSnackBar('Error: Could not identify salon');
-        return;
-      }
-
-      if (!isFavorite) {
-        await _addToFavorites(salonId);
+      // Create reference to user's favorites document and subcollection
+      final userFavoritesRef = _firestore
+          .collection('favorites')
+          .doc(user.uid)
+          .collection('userFavorites')
+          .doc(salonId);
+          
+      // Check if the salon is already a favorite
+      final docSnapshot = await userFavoritesRef.get();
+      
+      if (docSnapshot.exists) {
+        // Remove from favorites
+        await userFavoritesRef.delete();
       } else {
-        await _removeFromFavorites(salonId);
+        // Add to favorites
+        await userFavoritesRef.set({
+          'salonId': salonId,
+          'timestamp': FieldValue.serverTimestamp(),
+          'salonName': widget.salonData['saloonName'] ?? widget.salonData['name'],
+          'shopUrl': widget.salonData['shopUrl'],
+          'services': widget.salonData['services'],
+          'workingHours': widget.salonData['workingHours'],
+        });
       }
+      
+      setState(() {
+        isFavorite = !isFavorite;
+      });
     } catch (e) {
-      _showSnackBar('Error: ${e.toString()}', isError: true);
+      _showSnackBar('Error updating favorites', isError: true);
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
       }
     }
-  }
-
-  String? _getSalonId() {
-    return widget.salonData['uid']?.toString() ?? 
-           widget.salonData['id']?.toString() ?? 
-           widget.salonData['salonId']?.toString() ??
-           widget.salonData['userId']?.toString();
-  }
-
-  Future<void> _addToFavorites(String salonId) async {
-    try {
-      final enrichedSalonData = _prepareEnrichedSalonData(salonId);
-      
-      final canAdd = await _favoritesService.canAddMoreFavorites();
-      if (!canAdd) {
-        _showSnackBar('Maximum favorites limit reached', isError: true);
-        return;
-      }
-      
-      await _favoritesService.addToFavorites(enrichedSalonData);
-      _showSnackBar('Added to favorites');
-    } catch (e) {
-      if (e.toString().contains('already in favorites')) {
-        _showSnackBar('Salon is already in your favorites');
-      } else {
-        rethrow;
-      }
-    }
-  }
-
-  Map<String, dynamic> _prepareEnrichedSalonData(String salonId) {
-    return {
-      ...widget.salonData,
-      'salonId': salonId,
-      'uid': salonId,
-      'id': salonId,
-      'email': widget.salonData['email'] ?? '',
-      'name': widget.salonData['name'] ?? '',
-      'saloonName': widget.salonData['saloonName'] ?? widget.salonData['name'] ?? '',
-    };
-  }
-
-  Future<void> _removeFromFavorites(String salonId) async {
-    await _favoritesService.removeFromFavorites(salonId);
-    _showSnackBar('Removed from favorites');
-  }
-
-  void _showSnackBar(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : null,
-      ),
-    );
-  }
-
-
+}
 
   void calculateTotals() {
-    final services = widget.salonData['services'] as List<dynamic>;
+    final services = widget.salonData['services'] as List<dynamic>? ?? [];
     double amount = 0.0;
     int minutes = 0;
 
     for (int i = 0; i < services.length; i++) {
       if (toggleStates[i] == true) {
-        amount += double.parse(services[i]['price'].toString());
-        minutes += int.parse(services[i]['duration'].toString());
+        amount += double.tryParse(services[i]['price']?.toString() ?? '0') ?? 0.0;
+        minutes += int.tryParse(services[i]['duration']?.toString() ?? '0') ?? 0;
       }
     }
 
@@ -195,68 +166,30 @@ Future<void> toggleFavorite() async {
     });
   }
 
-  void onTimeSelected(String time) {
-    setState(() {
-      selectedTimeSlot = time;
-    });
-  }
-
-
-     
-
-
-  
-
-  
-
-  (String, String) _extractWorkingHours() {
-    try {
-      final workingHours = widget.salonData['workingHours'] as Map<String, dynamic>;
-      
-      // Extract opening and closing times with AM/PM format
-      String opening = workingHours['opening'].toString().trim();
-      String closing = workingHours['closing'].toString().trim();
-      
-      print('Extracted opening: $opening');
-      print('Extracted closing: $closing');
-      
-      // Already in 12-hour format, just normalize the format
-      String normalizeTime(String time) {
-        time = time.replaceAll('"', '').trim();
-        // Ensure proper spacing between time and AM/PM
-        return time.replaceAll(RegExp(r'([AP]M)'), ' ').trim();
-      }
-
-      final result = (normalizeTime(opening), normalizeTime(closing));
-      print('Final times: $result');
-      return result;
-    } catch (e) {
-      print('Error parsing working hours: $e');
-      return ("9:00 AM", "6:00 PM"); // fallback default values
-    }
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : null,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final services = widget.salonData['services'] as List<dynamic>;
+    final services = widget.salonData['services'] as List<dynamic>? ?? [];
+    final workingHours = widget.salonData['workingHours'] as Map<String, dynamic>? ?? {};
     
-    // Safely extract working hours with null checks and type casting
-    String opening = "9:00 AM";  // default value
-    String closing = "6:00 PM";  // default value
-    
-    try {
-      if (widget.salonData['workingHours'] != null) {
-        final workingHours = widget.salonData['workingHours'] as Map<String, dynamic>;
-        opening = workingHours['opening']?.toString() ?? "9:00 AM";
-        closing = workingHours['closing']?.toString() ?? "6:00 PM";
-      }
-    } catch (e) {
-      print('Error extracting working hours: $e');
-    }
-
-    // Format working hours for display
+    final opening = workingHours['opening']?.toString() ?? "9:00 AM";
+    final closing = workingHours['closing']?.toString() ?? "6:00 PM";
     final formattedWorkingHours = "$opening - $closing";
-    
+
+    final salonId = _getSalonId() ?? '';
+
+
     return SafeArea(
       child: Scaffold(
         body: Stack(
@@ -266,13 +199,6 @@ Future<void> toggleFavorite() async {
                 SliverToBoxAdapter(
                   child: Column(
                     children: [
-                      // ImageContainer(
-                      //   salonData: widget.salonData,
-                      //   isFavorite: isFavorite,
-                      //   onFavoriteToggle: (){}, 
-                      //   isLoading: isLoading,
-                      // ),
-
                       ImageContainer(
                         salonData: widget.salonData,
                         isFavorite: isFavorite,
@@ -280,10 +206,13 @@ Future<void> toggleFavorite() async {
                         isLoading: isLoading,
                       ),
                       const SizedBox(height: 100),
+
+                        const SizedBox(height: 20),
+  
+
                     ],
                   ),
                 ),
-                     
                 SliverFillRemaining(
                   hasScrollBody: true,
                   child: Container(
@@ -300,6 +229,15 @@ Future<void> toggleFavorite() async {
                     child: ListView(
                       padding: const EdgeInsets.all(16),
                       children: [
+
+
+                                              SalonReviewsPreview(
+                        salonId: salonId,
+                        onViewAllReviews: () => _navigateToAllReviews(salonId),
+                      ),
+                      const SizedBox(height: 20),
+                      const Divider(),
+
                         Text(
                           "Services",
                           style: GoogleFonts.montserrat(
@@ -322,9 +260,7 @@ Future<void> toggleFavorite() async {
                           );
                         }).toList(),
                         const SizedBox(height: 20),
-                        WorkingHours(
-                          workingHours: formattedWorkingHours,
-                        ),
+                        WorkingHours(workingHours: formattedWorkingHours),
                         const SizedBox(height: 20),
                         Text(
                           "Select Date",
@@ -334,40 +270,15 @@ Future<void> toggleFavorite() async {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        TextField(
-                          readOnly: true,
-                          controller: TextEditingController(
-                            text: "${selectedDate.day}/${selectedDate.month}/${selectedDate.year}"
-                          ),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: Colors.blue.shade100,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            suffixIcon: const Icon(Icons.calendar_today),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          onTap: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => CustomDatePicker(
-                                initialDate: selectedDate,
-                                onDateSelected: (date) {
-                                  setState(() {
-                                    selectedDate = date;
-                                  });
-                                },
-                              ),
-                            );
-                          },
-                        ),
+                        _buildDatePicker(),
                         const SizedBox(height: 20),
                         TimeSlots(
                           opening: opening,
                           closing: closing,
-                          onTimeSelected: onTimeSelected,
+                          onTimeSelected: (time) => setState(() => selectedTimeSlot = time),
                           totalDuration: totalMinutes,
+                          salonId: _getSalonId() ?? '',
+                          selectedDate: selectedDate,
                         ),
                         const SizedBox(height: 100),
                       ],
@@ -381,73 +292,9 @@ Future<void> toggleFavorite() async {
               left: 0,
               right: 0,
               child: BookingContainer(
-                totalMinutes: totalMinutes, 
+                totalMinutes: totalMinutes,
                 totalAmount: totalAmount,
-                onBookPress: () {
-                  // Check if time slot is selected
-                  if (selectedTimeSlot == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please select a time slot'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                    return;
-                  }
-
-                  // Get selected services
-                  final List<Map<String, dynamic>> selectedServices = [];
-                  final services = widget.salonData['services'] as List<dynamic>;
-                  
-                  // for (int i = 0; i < services.length; i++) {
-                  //   if (toggleStates[i] == true) {
-                  //     selectedServices.add({
-                  //       'name': services[i]['name'],
-                  //       'price': services[i]['price'],
-                  //       'duration': services[i]['duration'],
-                  //     });
-                  //   }
-                  // }
-
-                  // Add some debug prints to see the data
-                  for (int i = 0; i < services.length; i++) {
-                    if (toggleStates[i] == true) {
-                      // Debug print to see what's in services[i]
-                      print('Service being added: ${services[i]}');
-                      
-                      selectedServices.add({
-                        'name': services[i]['name'] ?? services[i]['serviceName'] ?? 'Unnamed Service', // Try alternative field name and provide fallback
-                        'price': services[i]['price'] ?? 0.0,
-                        'duration': services[i]['duration'] ?? 0,
-                      });
-                      
-                      // Debug print to verify what was added
-                      print('Added service: ${selectedServices.last}');
-                    }
-                  }
-                  // Check if any service is selected
-                  if (selectedServices.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please select at least one service'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                    return;
-                  }
-
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => PaymentPage(
-                        selectedServices: selectedServices,
-                        totalAmount: totalAmount,
-                        selectedDate: selectedDate,
-                        selectedTime: selectedTimeSlot!,
-                        salonData: widget.salonData,
-                      ),
-                    ),
-                  );
-                },
+                onBookPress: _handleBooking,
               ),
             ),
           ],
@@ -456,30 +303,84 @@ Future<void> toggleFavorite() async {
     );
   }
 
-}
-
-
-class FavoriteService {
-  final FirebaseFirestore _firestore;
-  final FirebaseAuth _auth;
-
-  FavoriteService({
-    FirebaseFirestore? firestore,
-    FirebaseAuth? auth,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
-
-  Stream<bool> isFavorite(String salonId) {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return Stream.value(false);
-
-    return _firestore
-        .collection('favorites')
-        .where('userId', isEqualTo: userId)
-        .where('salonId', isEqualTo: salonId)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.isNotEmpty);
+  Widget _buildDatePicker() {
+    return TextField(
+      readOnly: true,
+      controller: TextEditingController(
+        text: "${selectedDate.day}/${selectedDate.month}/${selectedDate.year}"
+      ),
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Colors.blue.shade100,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        suffixIcon: const Icon(Icons.calendar_today),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (context) => CustomDatePicker(
+            initialDate: selectedDate,
+            onDateSelected: (date) => setState(() => selectedDate = date),
+          ),
+        );
+      },
+    );
   }
+
+  void _handleBooking() {
+    if (selectedTimeSlot == null) {
+      _showSnackBar('Please select a time slot', isError: true);
+      return;
+    }
+
+    final List<Map<String, dynamic>> selectedServices = [];
+    final services = widget.salonData['services'] as List<dynamic>? ?? [];
+
+    for (int i = 0; i < services.length; i++) {
+      if (toggleStates[i] == true) {
+        selectedServices.add({
+          'name': services[i]['name'] ?? services[i]['serviceName'] ?? 'Unnamed Service',
+          'price': services[i]['price'] ?? 0.0,
+          'duration': services[i]['duration'] ?? 0,
+        });
+      }
+    }
+
+    if (selectedServices.isEmpty) {
+      _showSnackBar('Please select at least one service', isError: true);
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PaymentPage(
+          selectedServices: selectedServices,
+          totalAmount: totalAmount,
+          selectedDate: selectedDate,
+          selectedTime: selectedTimeSlot!,
+          salonData: widget.salonData,
+        ),
+      ),
+    );
+  }
+
+
+  void _navigateToAllReviews(String salonId) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => AllReviewsPage(
+        salonId: salonId,
+        salonName: widget.salonData['saloonName'] ?? widget.salonData['name'] ?? 'Salon',
+      ),
+    ),
+  );
 }
 
+
+
+  
+}
 

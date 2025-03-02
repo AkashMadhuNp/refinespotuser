@@ -1,15 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:sec_pro/screens/home/bloc/bloc/home_bloc.dart';
-import 'package:sec_pro/screens/home/bloc/bloc/home_event.dart';
 import 'package:sec_pro/screens/home/bloc/bloc/home_state.dart';
+import 'package:sec_pro/screens/home/bloc/bloc/home_event.dart';
 import 'package:sec_pro/screens/home/widget/empty_favorites.dart';
 import 'package:sec_pro/screens/home/widget/home_drawer.dart';
 import 'package:sec_pro/screens/home/widget/home_header.dart';
 import 'package:sec_pro/screens/home/widget/services_grid.dart';
 import 'package:sec_pro/screens/home/widget/favorite_salon_card.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,7 +19,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -33,17 +33,24 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, state) {
         return SafeArea(
           child: Scaffold(
-            drawer: state is HomeLoaded ? HomeDrawer(
-              userName: state.userName,
-              email: state.email,
-              phoneNumber: state.phoneNumber,
-            ) : null,
+            key: _scaffoldKey,
+            drawer: _buildDrawer(state),
             body: _buildBody(state),
-            
           ),
         );
       },
     );
+  }
+
+  Widget? _buildDrawer(HomeState state) {
+    if (state is HomeLoaded) {
+      return HomeDrawer(
+        userName: state.userName,
+        email: state.email,
+        phoneNumber: state.phoneNumber,
+      );
+    }
+    return null;
   }
 
   Widget _buildBody(HomeState state) {
@@ -52,7 +59,21 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (state is HomeError) {
-      return Center(child: Text(state.message));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(state.message),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                context.read<HomeBloc>().add(LoadHomeData());
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
     }
 
     if (state is HomeLoaded) {
@@ -63,7 +84,9 @@ class _HomeScreenState extends State<HomeScreen> {
             HomeHeader(
               userName: state.userName,
               isLoading: false,
-              onMenuPressed: () => Scaffold.of(context).openDrawer(),
+              onMenuPressed: () {
+                _scaffoldKey.currentState?.openDrawer();
+              },
             ),
             Expanded(
               child: RefreshIndicator(
@@ -71,6 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   context.read<HomeBloc>().add(LoadHomeData());
                 },
                 child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -88,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 16),
                       _buildFavorites(state.favorites),
-                      SizedBox(height: 200,)
+                      const SizedBox(height: 200),
                     ],
                   ),
                 ),
@@ -102,27 +126,34 @@ class _HomeScreenState extends State<HomeScreen> {
     return const Center(child: Text('Something went wrong'));
   }
 
-
-  Widget _buildFavorites(List<DocumentSnapshot> favorites) {
+// Update your FavoriteSalonCard to match the actual field structure in Firestore
+Widget _buildFavorites(List<DocumentSnapshot> favorites) {
   if (favorites.isEmpty) {
+    print('No favorites to display');
     return const EmptyFavorites();
   }
 
+  print('Building favorites list with ${favorites.length} items');
+  
   return ListView.builder(
     shrinkWrap: true,
     physics: const NeverScrollableScrollPhysics(),
     itemCount: favorites.length,
     padding: const EdgeInsets.all(16),
     itemBuilder: (context, index) {
-      final salon = favorites[index].data() as Map<String, dynamic>;
-     
-      if (!salon.containsKey('salonId')) {
-        salon['salonId'] = favorites[index].id;
-      }
+      final docData = favorites[index].data() as Map<String, dynamic>;
+      
+      // Create a consistent salon map that matches what's in Firestore
+      final Map<String, dynamic> salon = {
+        'salonId': favorites[index].id,
+        'salonName': docData['salonName'] ?? 'Unknown Salon', // Use salonName consistently
+        'location': docData['location'] ?? docData['address'] ?? 'Location not available',
+        'phone': docData['phone'] ?? 'Not available',
+        'shopUrl': docData['shopUrl'] ?? docData['profileUrl'] ?? '',
+      };
+      
       return FavoriteSalonCard(salon: salon);
     },
   );
 }
-
-  
 }

@@ -1,106 +1,94 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:sec_pro/models/favorite_model.dart';
 
 class FavoritesService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  
-  static const int _maxFavorites = 20; // Set your desired limit
 
-  // Check if a salon is in favorites
-  Stream<bool> isSalonFavorite(String salonId) {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return Stream.value(false);
+  // Add a salon to favorites
+  Future<void> addToFavorites(Map<String, dynamic> salonData) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
 
-    return _firestore
+    final salonId = salonData['salonId'] ?? salonData['uid'];
+    if (salonId == null) {
+      throw Exception('Salon ID is missing');
+    }
+
+    // Add timestamp if not present
+    if (!salonData.containsKey('addedAt')) {
+      salonData['addedAt'] = FieldValue.serverTimestamp();
+    }
+
+    // Add the salon to user favorites
+    await _firestore
         .collection('favorites')
-        .doc(userId)
+        .doc(user.uid)
         .collection('userFavorites')
         .doc(salonId)
-        .snapshots()
-        .map((doc) => doc.exists);
+        .set(salonData);
   }
 
-  // Check if user can add more favorites
-  Future<bool> canAddMoreFavorites() async {
-  final userId = _auth.currentUser?.uid;
-  if (userId == null) return false;
-
-  final snapshot = await _firestore
-      .collection('favorites')
-      .doc(userId)
-      .collection('userFavorites')
-      .count()
-      .get();
-
-  final int favoritesCount = snapshot.count ?? 0; // Ensure it's not null
-  return favoritesCount < _maxFavorites;
-}
-
-
-  // Add salon to favorites
-  Future<void> addToFavorites(Map<String, dynamic> salonData) async {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) {
-      throw Exception('User not authenticated');
-    }
-
-    final salonId = salonData['uid'] ?? salonData['salonId'];
-    if (salonId == null) {
-      throw Exception('Invalid salon ID');
-    }
-
-    // Check if already in favorites
-    final docRef = _firestore
-        .collection('favorites')
-        .doc(userId)
-        .collection('userFavorites')
-        .doc(salonId);
-
-    final doc = await docRef.get();
-    if (doc.exists) {
-      throw Exception('Salon already in favorites');
-    }
-
-    await docRef.set({
-      'salonId': salonId,
-      'salonName': salonData['saloonName'] ?? salonData['name'] ?? '',
-      'name': salonData['name'] ?? '',
-      'location': salonData['location'] ?? '',
-      'profileUrl': salonData['shopUrl'] ?? salonData['profileUrl'] ?? '',
-      'addedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  // Remove from favorites
+  // Remove a salon from favorites
   Future<void> removeFromFavorites(String salonId) async {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) {
+    final user = _auth.currentUser;
+    if (user == null) {
       throw Exception('User not authenticated');
     }
+
+    if (salonId.isEmpty) {
+      throw Exception('Salon ID is required');
+    }
+    
+    print('Removing salon with ID $salonId from favorites');
 
     await _firestore
         .collection('favorites')
-        .doc(userId)
+        .doc(user.uid)
         .collection('userFavorites')
         .doc(salonId)
         .delete();
   }
 
-  // Get user's favorites
-  Stream<List<FavoriteSalon>> getFavorites() {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return Stream.value([]);
+  // Check if a salon is in favorites
+  Future<bool> isFavorite(String salonId) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return false;
+    }
 
-    return _firestore
+    final docSnapshot = await _firestore
         .collection('favorites')
-        .doc(userId)
+        .doc(user.uid)
         .collection('userFavorites')
-        .orderBy('addedAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => FavoriteSalon.fromMap({...doc.data(), 'salonId': doc.id}))
-            .toList());
+        .doc(salonId)
+        .get();
+
+    return docSnapshot.exists;
+  }
+
+  // Get all favorite salons
+  Future<List<Map<String, dynamic>>> getAllFavorites() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return [];
+    }
+
+    final snapshot = await _firestore
+        .collection('favorites')
+        .doc(user.uid)
+        .collection('userFavorites')
+        .get();
+
+    return snapshot.docs
+        .map((doc) {
+          final data = doc.data();
+          // Ensure salonId is available
+          data['salonId'] = doc.id;
+          return data;
+        })
+        .toList();
   }
 }

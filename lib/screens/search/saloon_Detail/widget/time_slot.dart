@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -6,13 +7,17 @@ class TimeSlots extends StatefulWidget {
   final String closing;
   final Function(String) onTimeSelected;
   final int totalDuration;
+  final String salonId;
+  final DateTime selectedDate;
 
   const TimeSlots({
     Key? key,
     required this.opening,
     required this.closing,
     required this.onTimeSelected,
-    required this.totalDuration,
+    required this.totalDuration, 
+    required this.salonId, 
+    required this.selectedDate,
   }) : super(key: key);
 
   @override
@@ -23,12 +28,124 @@ class _TimeSlotsState extends State<TimeSlots> {
   String? selectedStartTime;
   List<String> selectedTimeSlots = [];
   List<String> timeSlots = [];
+  List<String> bookedTimeSlots=[];
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    generateTimeSlots();
+    _initializeTimeSlots();
   }
+
+  Future<void> _initializeTimeSlots() async {
+    if (!mounted) return;  // Early exit if widget is already disposed
+    await fetchBookedSlots();  
+    if (!mounted) return;  // Check again after async operation
+    generateTimeSlots();       
+    if (mounted) {  // Check before setState
+      setState(() => isLoading = false);
+    }
+  }
+
+
+    @override
+  void didUpdateWidget(TimeSlots oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDate != widget.selectedDate) {
+      _initializeTimeSlots();
+    }
+  }
+
+
+
+
+
+  Future<void> fetchBookedSlots() async {
+    try {
+      if (!mounted) return;  // Early exit if widget is already disposed
+      
+      if (widget.salonId.isEmpty) {
+        print('Error: Invalid salon ID');
+        return;
+      }
+
+      final startOfDay = DateTime(
+        widget.selectedDate.year,
+        widget.selectedDate.month,
+        widget.selectedDate.day,
+      );
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+
+      final appointments = await FirebaseFirestore.instance
+          .collection('appointments')
+          .where('salonId', isEqualTo: widget.salonId)
+          .where('appointmentDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('appointmentDate', isLessThan: Timestamp.fromDate(endOfDay))
+          .where('bookingStatus', isEqualTo: 'confirmed')
+          .get();
+
+      // Check if mounted before updating state
+      if (mounted) {
+        setState(() {
+          bookedTimeSlots.clear();
+          for (var doc in appointments.docs) {
+            final timeSlot = doc.data()['timeSlot'] as String;
+            if (timeSlot.contains(' - ')) {
+              final parts = timeSlot.split(' - ');
+              markRangeAsBooked(parts[0], parts[1]);
+            }
+          }
+        });
+      }
+    } catch (e) {
+      print('Error fetching booked slots: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading booked slots: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+ 
+ void markRangeAsBooked(String startTime, String endTime) {
+    try {
+      DateTime start = _parseTime(startTime);
+      DateTime end = _parseTime(endTime);
+      
+      var current = start;
+      while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
+        bookedTimeSlots.add(_formatTimeIn12Hour(current));
+        current = current.add(const Duration(minutes: 30));
+      }
+    } catch (e) {
+      print('Error marking range as booked: $e');
+    }
+  }
+
+
+  // Update the isSlotSelectable method to check for booked slots
+  bool isSlotSelectable(String timeSlot) {
+    if (widget.totalDuration == 0) return true;
+    if (timeSlot == timeSlots.last) return false;
+    if (bookedTimeSlots.contains(timeSlot)) return false;
+    
+    // Also check if any slot in the required duration is booked
+    int slotIndex = timeSlots.indexOf(timeSlot);
+    int slotsNeeded = (widget.totalDuration / 30).ceil();
+    
+    for (int i = 0; i <= slotsNeeded; i++) {
+      if (slotIndex + i >= timeSlots.length) return false;
+      String currentSlot = timeSlots[slotIndex + i];
+      if (bookedTimeSlots.contains(currentSlot)) return false;
+    }
+    
+    return (slotIndex + slotsNeeded) < timeSlots.length;
+  }
+
 
   void generateTimeSlots() {
     try {
@@ -112,7 +229,7 @@ class _TimeSlotsState extends State<TimeSlots> {
     }
   }
 
-  void selectTimeRange(String startTime, BuildContext context) {
+    void selectTimeRange(String startTime, BuildContext context) {
     if (widget.totalDuration == 0) {
       showDialog(
         context: context,
@@ -133,6 +250,9 @@ class _TimeSlotsState extends State<TimeSlots> {
       return;
     }
 
+    // Check if mounted before setState
+    if (!mounted) return;
+    
     setState(() {
       selectedStartTime = startTime;
       selectedTimeSlots.clear();
@@ -142,16 +262,18 @@ class _TimeSlotsState extends State<TimeSlots> {
       if (startIndex == -1) return;
 
       // Calculate how many 30-minute slots we need
-      int slotsNeeded = (widget.totalDuration / 30).ceil();
+      int slotsNeeded = widget.totalDuration <= 30 ? 0 : (widget.totalDuration / 30).ceil() - 1;
+
       print('Total duration: ${widget.totalDuration} minutes');
       print('Slots needed: $slotsNeeded');
       
       // Check if we have enough slots available
-      if (startIndex + slotsNeeded > timeSlots.length) {
+      if (startIndex + slotsNeeded >= timeSlots.length) {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('Invalid Time Selection',
+            title: Text(
+              'Invalid Time Selection',
                 style: GoogleFonts.montserrat(fontWeight: FontWeight.w600)),
             content: Text(
                 'Selected time slot cannot accommodate the service duration of ${widget.totalDuration} minutes. Please select an earlier time.',
@@ -189,34 +311,27 @@ class _TimeSlotsState extends State<TimeSlots> {
     });
   }
 
-  bool isSlotSelectable(String timeSlot) {
-    if (widget.totalDuration == 0) return true;
-    
-    // Don't allow selection of the last slot (closing time)
-    if (timeSlot == timeSlots.last) return false;
-    
-    int slotIndex = timeSlots.indexOf(timeSlot);
-    int slotsNeeded = (widget.totalDuration / 30).ceil();
-    
-    // Check if there are enough consecutive slots available
-    // Add 1 to slotsNeeded to account for the end time
-    return (slotIndex + slotsNeeded) < timeSlots.length;
-  }
 
-  bool isSlotSelected(String timeSlot) {
+   bool isSlotSelected(String timeSlot) {
     return selectedTimeSlots.contains(timeSlot);
   }
 
-  bool isSlotInSelectedRange(String timeSlot) {
+bool isSlotInSelectedRange(String timeSlot) {
     if (selectedStartTime == null) return false;
     
     int startIndex = timeSlots.indexOf(selectedStartTime!);
     int currentIndex = timeSlots.indexOf(timeSlot);
-    int slotsNeeded = (widget.totalDuration / 30).ceil();
     
-    // Include both start and end slots in the range
+    // For 30-minute duration, only highlight the selected slot
+    if (widget.totalDuration <= 30) {
+      return currentIndex == startIndex;
+    }
+    
+    // For longer durations, highlight the range
+    int slotsNeeded = (widget.totalDuration / 30).ceil() - 1;
     return currentIndex >= startIndex && currentIndex <= (startIndex + slotsNeeded);
   }
+
 
   @override
   Widget build(BuildContext context) {

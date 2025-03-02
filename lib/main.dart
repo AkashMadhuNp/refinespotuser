@@ -12,7 +12,6 @@ import 'package:sec_pro/service/auth/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 
-//stripe payment gateway
 
 class SimpleBlocObserver extends BlocObserver {
   @override

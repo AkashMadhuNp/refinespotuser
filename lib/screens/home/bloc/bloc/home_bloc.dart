@@ -34,22 +34,61 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         return;
       }
 
+      // Print user ID for debugging
+      print('Current user ID: ${currentUser.uid}');
+      
       final userData = await _fetchUserData(currentUser.uid);
       final services = await _fetchServices();
 
+      // Initial load of favorites
+      final initialFavorites = await _fetchFavorites(currentUser.uid);
+      
       // Set up real-time favorites listener
       _setupFavoritesListener(currentUser.uid, emit);
 
-      // Initial state with empty favorites (will be updated by stream)
       emit(HomeLoaded(
         userName: userData['name'] ?? currentUser.email?.split('@')[0] ?? 'User',
         email: currentUser.email ?? '',
         phoneNumber: userData['phone']?.toString() ?? 'N/A',
         services: services,
-        favorites: [],
+        favorites: initialFavorites,
       ));
     } catch (e) {
+      print('Error in LoadHomeData: $e');
       emit(HomeError('Failed to load data: ${e.toString()}'));
+    }
+  }
+
+  // Fetch favorites directly from the correct path
+  Future<List<DocumentSnapshot>> _fetchFavorites(String userId) async {
+    try {
+      print('Fetching favorites for user ID: $userId');
+      
+      // Get the favorites collection document for the user
+      final userFavoritesCollection = _firestore.collection('favorites').doc(userId);
+      
+      // Check if the document exists first
+      final docSnapshot = await userFavoritesCollection.get();
+      if (!docSnapshot.exists) {
+        print('No favorites document exists for this user');
+        return [];
+      }
+      
+      // Get all documents in the userFavorites subcollection
+      final snapshot = await userFavoritesCollection.collection('userFavorites').get();
+      
+      print('Found ${snapshot.docs.length} favorite salons');
+      
+      // Debug print each favorite's data
+      for (var doc in snapshot.docs) {
+        print('Favorite salon ID: ${doc.id}');
+        print('Salon data: ${doc.data()}');
+      }
+      
+      return snapshot.docs;
+    } catch (e) {
+      print('Error fetching favorites: $e');
+      return [];
     }
   }
 
@@ -57,19 +96,19 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     // Cancel existing subscription if any
     _favoritesSubscription?.cancel();
 
-    // Set up new subscription
+    // Set up new subscription to the correct path
     _favoritesSubscription = _firestore
         .collection('favorites')
         .doc(userId)
         .collection('userFavorites')
-        .orderBy('addedAt', descending: true)
         .snapshots()
         .listen(
       (snapshot) {
+        print('Favorites listener triggered: ${snapshot.docs.length} items');
         add(FavoritesUpdated(snapshot.docs));
       },
       onError: (error) {
-        emit(HomeError('Failed to load favorites: $error'));
+        print('Favorites listener error: $error');
       },
     );
   }
@@ -80,6 +119,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   ) async {
     if (state is HomeLoaded) {
       final currentState = state as HomeLoaded;
+      
+      print('Favorites updated event: ${event.favorites.length} items');
+      
       emit(HomeLoaded(
         userName: currentState.userName,
         email: currentState.email,
@@ -95,6 +137,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       final userDoc = await _firestore.collection('users').doc(userId).get();
       return userDoc.exists ? userDoc.data() ?? {} : {};
     } catch (e) {
+      print('Error fetching user data: $e');
       return {};
     }
   }
@@ -106,6 +149,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           .map((doc) => HomeService.fromFirestore(doc.data() as Map<String, dynamic>))
           .toList();
     } catch (e) {
+      print('Error fetching services: $e');
       return [];
     }
   }

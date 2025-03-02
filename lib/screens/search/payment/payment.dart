@@ -45,7 +45,7 @@ class _PaymentPageState extends State<PaymentPage> {
     try {
       await StripePaymentService.makePayment(
         amount: widget.totalAmount,
-        currency: 'usd',
+        // currency: 'inr',
         salonData: widget.salonData,
         selectedServices: widget.selectedServices,
         selectedDate: widget.selectedDate,

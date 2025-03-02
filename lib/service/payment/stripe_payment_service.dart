@@ -26,21 +26,20 @@ class StripePaymentService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('User not authenticated');
 
-      print('Selected Services Debug:');
-      selectedServices.forEach((service) {
-        print('Service Data: $service');
-        print('Service Name: ${service['serviceName']}');
-        print('Name: ${service['name']}');
-      });
+      final timeSlotParts = selectedTime.split(' - ');
+      final startTime = timeSlotParts[0];
+      final endTime = timeSlotParts.length > 1 ? timeSlotParts[1] : '';
 
       final appointmentData = {
         'userId': user.uid,
         'userEmail': user.email,
-        'salonId': salonData['id'] ?? '',
+        'salonId': salonData['id'] ?? salonData['uid'] ?? '',
         'salonName': salonData['name'] ?? salonData['saloonName'] ?? '',
         'salonLocation': salonData['location'] ?? '',
         'appointmentDate': Timestamp.fromDate(selectedDate),
         'timeSlot': selectedTime,
+        'startTime': startTime,
+        'endTime': endTime,
         'services': selectedServices.map((service) => {
           'serviceName': service['serviceName'] ?? service['name'] ?? '',
           'price': service['price'],
@@ -51,6 +50,7 @@ class StripePaymentService {
         'paymentIntentId': paymentIntentId,
         'bookingStatus': 'confirmed',
         'createdAt': FieldValue.serverTimestamp(),
+        'currency': 'inr', // Add currency information
       };
 
       await FirebaseFirestore.instance
@@ -67,9 +67,12 @@ class StripePaymentService {
     String currency,
   ) async {
     try {
+      // For INR, amount needs to be in paise (1 INR = 100 paise)
+      final amountInSmallestUnit = (amount * 100).round().toString();
+      
       Map<String, dynamic> body = {
-        'amount': (amount * 100).round().toString(), // amount in cents
-        'currency': currency,
+        'amount': amountInSmallestUnit,
+        'currency': currency.toLowerCase(),
         'payment_method_types[]': 'card'
       };
 
@@ -86,7 +89,6 @@ class StripePaymentService {
 
   static Future<void> makePayment({
     required double amount,
-    required String currency,
     required Map<String, dynamic> salonData,
     required List<Map<String, dynamic>> selectedServices,
     required DateTime selectedDate,
@@ -94,6 +96,9 @@ class StripePaymentService {
     bool useGooglePay = false,
   }) async {
     try {
+      // Set currency to INR
+      const String currency = 'inr';
+      
       // Create payment intent
       Map<String, dynamic> paymentIntent = 
           await createPaymentIntent(amount, currency);
@@ -105,7 +110,7 @@ class StripePaymentService {
           merchantDisplayName: 'REFINE SPOT',
           style: ThemeMode.system,
           googlePay: useGooglePay ? PaymentSheetGooglePay(
-            merchantCountryCode: 'US',
+            merchantCountryCode: 'IN', // Changed to India
             currencyCode: currency.toUpperCase(),
             testEnv: true,
           ) : null,
@@ -129,4 +134,4 @@ class StripePaymentService {
       throw Exception('Payment failed: $e');
     }
   }
-} 
+}

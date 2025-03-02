@@ -1,69 +1,53 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sec_pro/screens/search/saloon_Detail/sample.dart';
+import 'package:sec_pro/screens/search/search_Screen/bloc/search_bloc.dart';
+import 'package:sec_pro/screens/search/search_Screen/bloc/search_event.dart';
+import 'package:sec_pro/screens/search/search_Screen/bloc/search_state.dart';
+import 'package:sec_pro/screens/search/search_Screen/widgets/empty_result.dart';
+import 'package:sec_pro/screens/search/search_Screen/widgets/price_range.dart';
+import 'package:sec_pro/screens/search/search_Screen/widgets/salon_list_item.dart';
+import 'package:sec_pro/screens/search/search_Screen/widgets/search_bar.dart';
+import 'package:sec_pro/screens/search/search_Screen/widgets/service_filter.dart';
 
-class SearchScreen extends StatefulWidget {
+class SearchScreen extends StatelessWidget {
   const SearchScreen({super.key});
 
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => SearchBloc()..add(FetchServicesEvent()),
+      child: SearchScreenView(),
+    );
+  }
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class SearchScreenView extends StatefulWidget {
+  const SearchScreenView({super.key});
+
+  @override
+  State<SearchScreenView> createState() => _SearchScreenViewState();
+}
+
+class _SearchScreenViewState extends State<SearchScreenView> {
   final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-  double _minPrice = 0;
-  double _maxPrice = 5000;
-  RangeValues _currentRangeValues = RangeValues(0, 5000);
-  bool _showFilters = false;
-  
-  Stream<QuerySnapshot> _getSalonsStream() {
-    return FirebaseFirestore.instance
-        .collection('approved_saloon')
-        .snapshots();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
-  Map<String, dynamic> _convertSalonData(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    
-    // Handle working hours with sub-fields
-    Map<String, dynamic> workingHours;
-    if (data['workingHours'] != null && 
-        data['workingHours']['opening'] != null && 
-        data['workingHours']['closing'] != null) {
-      workingHours = {
-        'opening': data['workingHours']['opening'],
-        'closing': data['workingHours']['closing']
-      };
-    } else {
-      workingHours = {
-        'opening': '9:00 AM',
-        'closing': '6:00 PM'
-      };
-    }
-
-    // Handle coordinates
-    final coordinates = data['coordinates'] as Map<String, dynamic>;
-
-    return {
-      'id': doc.id,
-      'name': data['saloonName'] ?? 'Unknown',
-      'location': data['location'] ?? 'Unknown location',
-      'shopUrl': data['shopUrl'] ?? '',
-      'profileUrl': data['profileUrl'] ?? '',
-      'licenseUrl': data['licenseUrl'] ?? '',
-      'services': data['services'] ?? [],
-      'workingHours': workingHours,  
-      'phone': data['phone'] ?? '',
-      'email': data['email'] ?? '',
-      'holidays': data['holidays'] ?? [],
-      'coordinates': {
-        'latitude': coordinates['latitude'] ?? 0.0,
-        'longitude': coordinates['longitude'] ?? 0.0,
-      },
-      'status': data['status'] ?? '',
-    };
+  void _navigateToSalonDetails(Map<String, dynamic> salonData) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => SampleDetail(
+          salonData: salonData,
+        ),
+      ),
+    );
   }
 
   @override
@@ -72,284 +56,117 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Scaffold(
         body: Padding(
           padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
-              Row(
+          child: BlocBuilder<SearchBloc, SearchState>(
+            builder: (context, state) {
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    "Search",
-                    style: GoogleFonts.montserrat(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.4,
-                      color: const Color.fromRGBO(0, 76, 255, 1),
+                  const SizedBox(height: 20),
+                  
+                  // Search Bar Widget
+                  SearchBarWidget(
+                    controller: _searchController,
+                    onChanged: (value) => context.read<SearchBloc>().add(SearchQueryChanged(value)),
+                    showFilters: state.showFilters,
+                    onFilterToggle: () => context.read<SearchBloc>().add(ToggleFiltersEvent()),
+                  ),
+                  
+                  if (state.showFilters) ...[
+                    const SizedBox(height: 20),
+                    
+                    // Service Filter Widget
+                    ServiceFilterWidget(
+                      isLoading: state.isLoadingServices,
+                      availableServices: state.availableServices,
+                      selectedService: state.selectedService,
+                      onServiceChanged: (service) => 
+                          context.read<SearchBloc>().add(ServiceFilterChanged(service)),
                     ),
-                  ),
-                  const SizedBox(width: 40),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value.toLowerCase();
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'Search...',
-                        hintStyle: GoogleFonts.montserrat(
-                          color: Colors.grey.shade600,
-                          fontSize: 16,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(30.0),
-                          borderSide: BorderSide.none,
-                        ),
-                        filled: true,
-                        fillColor: Colors.blue.shade100,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12.0,
-                          horizontal: 16.0,
-                        ),
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                Icons.filter_list,
-                                color: _showFilters ? Colors.blue : Colors.grey.shade600,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _showFilters = !_showFilters;
-                                });
-                              },
-                            ),
-                            Icon(
-                              Icons.search,
-                              color: Colors.grey.shade600,
-                            ),
-                          ],
-                        ),
-                      ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Price Range Widget
+                    PriceRangeWidget(
+                      currentRangeValues: state.priceRange,
+                      minPrice: state.minPrice,
+                      maxPrice: state.maxPrice,
+                      onRangeChanged: (values) => context.read<SearchBloc>()
+                          .add(PriceRangeChanged(values.start, values.end)),
                     ),
-                  ),
-                ],
-              ),
-              if (_showFilters) ...[
-                const SizedBox(height: 20),
-                Text(
-                  'Price Range',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                RangeSlider(
-                  values: _currentRangeValues,
-                  min: _minPrice,
-                  max: _maxPrice,
-                  divisions: 50,
-                  labels: RangeLabels(
-                    '₹${_currentRangeValues.start.round()}',
-                    '₹${_currentRangeValues.end.round()}',
-                  ),
-                  onChanged: (RangeValues values) {
-                    setState(() {
-                      _currentRangeValues = values;
-                    });
-                  },
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '₹${_currentRangeValues.start.round()}',
-                      style: GoogleFonts.montserrat(
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    Text(
-                      '₹${_currentRangeValues.end.round()}',
-                      style: GoogleFonts.montserrat(
-                        color: Colors.grey.shade600,
+                    
+                    const SizedBox(height: 12),
+                    
+                    // Reset Filters Button
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: () => context.read<SearchBloc>().add(ResetFiltersEvent()),
+                        icon: Icon(Icons.refresh, size: 18),
+                        label: Text(
+                          'Reset Filters',
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.blue,
+                        ),
                       ),
                     ),
                   ],
-                ),
-              ],
-              const SizedBox(height: 20),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: _getSalonsStream(),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return const Center(child: Text('Something went wrong'));
-                    }
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Salon List
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: context.read<SearchBloc>().getSalonsStream(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return const Center(child: Text('Something went wrong'));
+                        }
 
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
 
-                    var salons = snapshot.data!.docs.where((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final name = data['saloonName']?.toString().toLowerCase() ?? '';
-                      final location = data['location']?.toString().toLowerCase() ?? '';
-                      final services = (data['services'] as List<dynamic>?) ?? [];
-                      
-                      // Check if any service price is within the selected range
-                      bool priceInRange = services.any((service) {
-                        final price = double.tryParse(service['price'].toString()) ?? 0;
-                        return price >= _currentRangeValues.start && 
-                               price <= _currentRangeValues.end;
-                      });
+                        final bloc = context.read<SearchBloc>();
+                        var salons = snapshot.data!.docs.where((doc) {
+                          final salonData = doc.data() as Map<String, dynamic>;
+                          return bloc.salonMatchesFilters(salonData);
+                        }).toList();
 
-                      return (name.contains(_searchQuery) || 
-                             location.contains(_searchQuery)) &&
-                             priceInRange;
-                    }).toList();
-
-                    if (salons.isEmpty) {
-                      return Center(
-                        child: Text(
-                          'No salons found',
-                          style: GoogleFonts.montserrat(
-                            fontSize: 16,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      itemCount: salons.length,
-                      itemBuilder: (context, index) {
-                        final salonDoc = salons[index];
-                        final salonData = _convertSalonData(salonDoc);
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16.0),
-                          child: GestureDetector(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => SampleDetail(
-                                    salonData: salonData,
-                                  ),
-                                ),
-                              );
+                        if (salons.isEmpty) {
+                          return EmptyResultsWidget(
+                            showFilters: state.showFilters,
+                            onResetFilters: () {
+                              context.read<SearchBloc>().add(ResetAllFiltersEvent());
+                              _searchController.clear();
                             },
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(15),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade100,
-                                borderRadius: BorderRadius.circular(15),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  // Salon Image
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Image.network(
-                                      salonData['shopUrl'],
-                                      height: 100,
-                                      width: 100,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) => Icon(
-                                        Icons.broken_image,
-                                        size: 100,
-                                        color: Colors.grey.shade400,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 15),
+                          );
+                        }
 
-                                  // Salon Details
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          salonData['name'],
-                                          style: GoogleFonts.montserrat(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black87,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.location_on,
-                                              size: 16,
-                                              color: Colors.blue,
-                                            ),
-                                            const SizedBox(width: 5),
-                                            Expanded(
-                                              child: Text(
-                                                salonData['location'],
-                                                style: GoogleFonts.montserrat(
-                                                  fontSize: 14,
-                                                  color: Colors.grey.shade700,
-                                                  fontWeight: FontWeight.w500
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                                maxLines: 1,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.design_services,
-                                              size: 16,
-                                              color: Colors.green,
-                                            ),
-                                            const SizedBox(width: 5),
-                                            Expanded(
-                                              child: Text(
-                                                (salonData['services'] as List<dynamic>)
-                                                    .map((service) => service['serviceName'].toString())
-                                                    .join(', '),
-                                                style: GoogleFonts.montserrat(
-                                                  fontSize: 14,
-                                                  color: Colors.grey.shade700,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                                maxLines: 2,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                        return ListView.builder(
+                          itemCount: salons.length,
+                          itemBuilder: (context, index) {
+                            final salonDoc = salons[index];
+                            final salonData = bloc.convertSalonData(salonDoc);
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 16.0),
+                              child: SalonListItem(
+                                salonData: salonData,
+                                onTap: () => _navigateToSalonDetails(salonData),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         );
                       },
-                    );
-                  },
-                ),
-              ),
-            ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
