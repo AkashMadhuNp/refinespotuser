@@ -64,7 +64,7 @@ class _SearchScreenViewState extends State<SearchScreenView> {
                 children: [
                   const SizedBox(height: 20),
                   
-                  // Search Bar Widget
+                  
                   SearchBarWidget(
                     controller: _searchController,
                     onChanged: (value) => context.read<SearchBloc>().add(SearchQueryChanged(value)),
@@ -75,7 +75,7 @@ class _SearchScreenViewState extends State<SearchScreenView> {
                   if (state.showFilters) ...[
                     const SizedBox(height: 20),
                     
-                    // Service Filter Widget
+                    
                     ServiceFilterWidget(
                       isLoading: state.isLoadingServices,
                       availableServices: state.availableServices,
@@ -86,7 +86,7 @@ class _SearchScreenViewState extends State<SearchScreenView> {
                     
                     const SizedBox(height: 20),
                     
-                    // Price Range Widget
+                    
                     PriceRangeWidget(
                       currentRangeValues: state.priceRange,
                       minPrice: state.minPrice,
@@ -97,7 +97,7 @@ class _SearchScreenViewState extends State<SearchScreenView> {
                     
                     const SizedBox(height: 12),
                     
-                    // Reset Filters Button
+                    
                     Center(
                       child: TextButton.icon(
                         onPressed: () => context.read<SearchBloc>().add(ResetFiltersEvent()),
@@ -117,7 +117,7 @@ class _SearchScreenViewState extends State<SearchScreenView> {
                   
                   const SizedBox(height: 20),
                   
-                  // Salon List
+                  
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
                       stream: context.read<SearchBloc>().getSalonsStream(),

@@ -126,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return const Center(child: Text('Something went wrong'));
   }
 
-// Update your FavoriteSalonCard to match the actual field structure in Firestore
+
 Widget _buildFavorites(List<DocumentSnapshot> favorites) {
   if (favorites.isEmpty) {
     print('No favorites to display');
@@ -143,10 +143,10 @@ Widget _buildFavorites(List<DocumentSnapshot> favorites) {
     itemBuilder: (context, index) {
       final docData = favorites[index].data() as Map<String, dynamic>;
       
-      // Create a consistent salon map that matches what's in Firestore
+      
       final Map<String, dynamic> salon = {
         'salonId': favorites[index].id,
-        'salonName': docData['salonName'] ?? 'Unknown Salon', // Use salonName consistently
+        'salonName': docData['salonName'] ?? 'Unknown Salon', 
         'location': docData['location'] ?? docData['address'] ?? 'Location not available',
         'phone': docData['phone'] ?? 'Not available',
         'shopUrl': docData['shopUrl'] ?? docData['profileUrl'] ?? '',

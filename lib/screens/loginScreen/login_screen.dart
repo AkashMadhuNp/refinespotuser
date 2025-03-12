@@ -5,6 +5,7 @@ import 'package:lottie/lottie.dart';
 import 'package:sec_pro/bloc/login_authentication/bloc/login_bloc.dart';
 import 'package:sec_pro/bloc/login_authentication/bloc/login_event.dart';
 import 'package:sec_pro/bloc/login_authentication/bloc/login_state.dart';
+import 'package:sec_pro/constant/constant.dart';
 import 'package:sec_pro/screens/forgetPassword/forget_password.dart';
 import 'package:sec_pro/screens/home/widget/home_nav_bar.dart';
 import 'package:sec_pro/screens/loginScreen/widget/custom_text_form_field.dart';
@@ -24,8 +25,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-
- 
 
   @override
   void dispose() {
@@ -51,18 +50,19 @@ class _LoginScreenState extends State<LoginScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.error),
-                backgroundColor: Colors.red,
+                backgroundColor: AppColors.error,
               ),
             );
           }
         },
         builder: (context, state) {
           return Scaffold(
+            backgroundColor: AppColors.background,
             body: SingleChildScrollView(
               child: Form(
                 key: _formKey,
                 child: Padding(
-                  padding: const EdgeInsets.only(left: 20.0, right: 20),
+                  padding: EdgeInsets.symmetric(horizontal: AppSizes.paddingLarge),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -73,15 +73,16 @@ class _LoginScreenState extends State<LoginScreen> {
                           repeat: true,
                           reverse: true,
                         ),
-                       ),
+                      ),
                       Text(
                         "LOGIN",
                         style: GoogleFonts.montserrat(
                           fontSize: 40,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey,
+                          color: AppColors.textSecondary,
                         ),
                       ),
+                      SizedBox(height: AppSizes.spacingMedium),
                       GestureDetector(
                         onTap: state is LoginLoading
                             ? null
@@ -94,8 +95,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           height: 60,
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(30),
-                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(AppSizes.borderRadiusLarge),
+                            color: AppColors.primaryLight,
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -108,31 +109,48 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               Text(
                                 "Sign in with Google",
-                                style: GoogleFonts.montserrat(),
+                                style: GoogleFonts.montserrat(
+                                  color: AppColors.textPrimary,
+                                ),
                               )
                             ],
                           ),
                         ),
                       ),
+                      SizedBox(height: AppSizes.spacingLarge),
                       Row(
                         children: [
                           SizedBox(
                             width: MediaQuery.of(context).size.width * 0.4,
-                            child: const Divider(thickness: 3),
+                            child: Divider(
+                              thickness: 3,
+                              color: AppColors.textSecondary.withOpacity(0.3),
+                            ),
                           ),
-                          const Text("OR"),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: AppSizes.paddingSmall),
+                            child: Text(
+                              "OR",
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ),
                           SizedBox(
                             width: MediaQuery.of(context).size.width * 0.4,
-                            child: const Divider(thickness: 3),
+                            child: Divider(
+                              thickness: 3,
+                              color: AppColors.textSecondary.withOpacity(0.3),
+                            ),
                           ),
                         ],
                       ),
+                      SizedBox(height: AppSizes.spacingLarge),
                       CustomTextField(
                         controller: _emailController,
                         validator: FormValidators.validateEmail,
                         hint: "Email",
                         prefixIcon: Icons.email,
                       ),
+                      SizedBox(height: AppSizes.spacingMedium),
                       CustomTextField(
                         controller: _passwordController,
                         validator: FormValidators.validatePassword,
@@ -143,6 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             _obscurePassword
                                 ? Icons.visibility_off
                                 : Icons.visibility,
+                            color: AppColors.textSecondary,
                           ),
                           onPressed: () {
                             setState(() {
@@ -163,12 +182,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Text(
                             "Forget Password?",
                             style: GoogleFonts.montserrat(
-                              color: const Color.fromRGBO(0, 76, 255, 1),
+                              color: AppColors.primary,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
+                      SizedBox(height: AppSizes.spacingMedium),
                       SizedBox(
                         width: double.infinity,
                         height: 56,
@@ -186,19 +206,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                   }
                                 },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color.fromRGBO(0, 76, 255, 1),
+                            backgroundColor: AppColors.primary,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(AppSizes.borderRadiusMedium),
                             ),
                             elevation: 0,
                           ),
                           child: state is LoginLoading
-                              ? const SizedBox(
+                              ? SizedBox(
                                   height: 24,
                                   width: 24,
                                   child: CircularProgressIndicator(
-                                    color: Colors.white,
+                                    color: AppColors.white,
                                     strokeWidth: 2,
                                   ),
                                 )
@@ -206,12 +225,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                   'Login',
                                   style: GoogleFonts.montserrat(
                                     fontSize: 16,
-                                    color: Colors.white,
+                                    color: AppColors.white,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
                         ),
                       ),
+                      SizedBox(height: AppSizes.spacingLarge),
                       Center(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -219,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Text(
                               "Don't have an account? ",
                               style: GoogleFonts.montserrat(
-                                color: Colors.black54,
+                                color: AppColors.textSecondary,
                               ),
                             ),
                             TextButton(
@@ -236,7 +256,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: Text(
                                 "Sign Up",
                                 style: GoogleFonts.montserrat(
-                                  color: const Color.fromRGBO(0, 76, 255, 1),
+                                  color: AppColors.primary,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),

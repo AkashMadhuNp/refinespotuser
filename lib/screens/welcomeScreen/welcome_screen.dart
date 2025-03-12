@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:sec_pro/constant/constant.dart';
 import 'package:sec_pro/screens/loginScreen/login_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
@@ -8,10 +9,11 @@ class WelcomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(height: MediaQuery.of(context).size.height*0.2,),
+          SizedBox(height: MediaQuery.of(context).size.height * 0.2),
           Center(
             child: Container(
               height: 300,
@@ -19,14 +21,14 @@ class WelcomeScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min, 
                 children: [
                   Container(
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       shape: BoxShape.circle,
-                      boxShadow: [
+                      boxShadow:[
                         BoxShadow(
-                          color: Colors.grey.withOpacity(0.5),
+                          color: AppColors.cardShadow,
                           spreadRadius: 5,
                           blurRadius: 7,
-                          offset: const Offset(0, 3),
+                          offset:  Offset(0, 3),
                         ),
                       ],
                     ),
@@ -39,25 +41,24 @@ class WelcomeScreen extends StatelessWidget {
                           width: 120,
                           fit: BoxFit.cover,
                         ),
-                        //child: Icon(Icons.switch_access_shortcut_sharp),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSizes.spacingXLarge),
                   Text(
                     "REFINE SPOT",
                     style: GoogleFonts.montserrat(
                       fontSize: 24,
-                      color: const Color.fromRGBO(0, 76, 255, 1),
+                      color: AppColors.primary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: AppSizes.spacingMedium),
                   Text(
                     "Spot the Salons nearby",
                     style: GoogleFonts.montserrat(
                       fontSize: 16,
-                      color: Colors.grey,
+                      color: AppColors.textSecondary,
                       fontWeight: FontWeight.normal,
                     ),
                   ),
@@ -66,34 +67,34 @@ class WelcomeScreen extends StatelessWidget {
             ),
           ),
           
-          SizedBox(height: 60,),
+          const SizedBox(height: AppSizes.spacingXXXLarge * 2.5),
 
           Container(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.all(20.0),
+                padding: const EdgeInsets.all(AppSizes.paddingLarge),
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color.fromRGBO(0, 76, 255, 1),
+                    backgroundColor: AppColors.primary,
                     minimumSize: const Size(double.infinity, 56),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(AppSizes.borderRadiusMedium),
                     ),
                     elevation: 0,
                   ),
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => LoginScreen(),
+                        builder: (context) => const LoginScreen(),
                       ),
                     );
                   },
-                  child:  Text(
+                  child: Text(
                     "Let's get started",
                     style: GoogleFonts.montserrat(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white,
+                      color: AppColors.white,
                     ),
                   ),
                 ),

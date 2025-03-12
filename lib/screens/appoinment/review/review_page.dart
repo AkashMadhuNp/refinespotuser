@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:sec_pro/constant/constant.dart';
 import 'package:sec_pro/screens/appoinment/review/util/review_utils.dart';
 import 'package:sec_pro/screens/appoinment/review/widget/action_button.dart';
 import 'package:sec_pro/screens/appoinment/review/widget/rating_selector.dart';
 import 'package:sec_pro/screens/appoinment/review/widget/review_form.dart';
-
 
 class ReviewPage extends StatefulWidget {
   final Map<String, dynamic> appointment;
@@ -64,13 +64,19 @@ class _ReviewPageState extends State<ReviewPage> {
   Future<void> _submitReview() async {
     if (_rating == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a rating')),
+        SnackBar(
+          content: Text('Please select a rating'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
     if (_reviewController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please write a review')),
+        SnackBar(
+          content: Text('Please write a review'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
@@ -91,9 +97,9 @@ class _ReviewPageState extends State<ReviewPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Review submitted successfully'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
         Navigator.pop(context);
@@ -103,7 +109,7 @@ class _ReviewPageState extends State<ReviewPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error submitting review: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -119,17 +125,21 @@ class _ReviewPageState extends State<ReviewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.white,
         title: Text(
           'Write Review',
           style: GoogleFonts.montserrat(
             fontWeight: FontWeight.bold,
+            color: AppColors.white,
           ),
         ),
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(AppSizes.paddingLarge),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -138,32 +148,35 @@ class _ReviewPageState extends State<ReviewPage> {
                 style: GoogleFonts.montserrat(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: AppSizes.spacingXXLarge),
               Text(
                 'Rate your experience',
                 style: GoogleFonts.montserrat(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: AppSizes.spacingLarge),
               RatingSelector(
                 currentRating: _rating,
                 onRatingChanged: _updateRating,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: AppSizes.spacingXXLarge),
               Text(
                 'Write your review',
                 style: GoogleFonts.montserrat(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: AppSizes.spacingLarge),
               ReviewForm(controller: _reviewController),
-              const SizedBox(height: 24),
+              SizedBox(height: AppSizes.spacingXXLarge),
               ActionButtons(
                 isSubmitting: _isSubmitting,
                 onClear: _clearForm,

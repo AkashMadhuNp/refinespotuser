@@ -55,6 +55,7 @@ dependencies:
   flutter_dotenv: ^5.2.1
   url_launcher: ^6.3.1
   flutter_rating_bar: ^4.0.1
+  flutter_launcher_icons: ^0.14.3
   
   
 
@@ -115,3 +116,17 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+  # Add this configuration section at the bottom of your pubspec.yaml file, 
+# after the flutter section
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "asset/logo.jpeg"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  web:
+    generate: false
+  windows:
+    generate: false
+  macos:
+    generate: false
