@@ -21,14 +21,11 @@ class SampleDetail extends StatefulWidget {
 }
 
 class _SampleDetailState extends State<SampleDetail> {
-  // Firebase instances
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   
-  // Stream subscription
   StreamSubscription? _favoriteSubscription;
 
-  // State variables
   bool isFavorite = false;
   bool isLoading = true;
   DateTime selectedDate = DateTime.now();
