@@ -29,7 +29,7 @@ class ProfileScreen extends StatelessWidget {
             child: Scaffold(
               body: SingleChildScrollView(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(18),
                   child: Column(
                     children: [
                       buildProfileHeader(context, state),  
